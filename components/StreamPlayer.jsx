@@ -12,6 +12,21 @@ export default function StreamPlayer({ streamId, isBroadcaster }) {
     const [isConnected, setIsConnected] = useState(false);
     const [error, setError] = useState(null);
 
+    // In StreamPlayer.jsx
+useEffect(() => {
+    socket.on('connect', () => {
+        console.log('Connected to signaling server');
+    });
+    socket.on('disconnect', () => {
+        console.log('Disconnected from signaling server');
+    });
+
+    socket.on('connect_error', (err) => {
+        console.error('Connection Error:', err);
+    });
+}, []);
+
+
     useEffect(() => {
         if (isBroadcaster) {
             navigator.mediaDevices.getUserMedia({ video: true, audio: true }).then((stream) => {
