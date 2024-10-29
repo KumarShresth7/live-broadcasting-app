@@ -1,6 +1,6 @@
 // app/profile/[username]/page.tsx
-export default function ProfilePage({ params }) {
-    const { username } = params;
+export default async function ProfilePage({ params }) {
+    const { username } = await params;
 
     return (
         <div className="p-4">
