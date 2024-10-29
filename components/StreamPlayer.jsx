@@ -4,7 +4,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import SimplePeer from 'simple-peer';
 import io from 'socket.io-client';
 
-const socket = io('http://localhost:3001'); // Use the env variable
+const socket = io('http://localhost:3001'); // Ensure backend CORS setup allows frontend origin
 
 export default function StreamPlayer({ streamId, isBroadcaster }) {
     const videoRef = useRef(null);
@@ -12,66 +12,75 @@ export default function StreamPlayer({ streamId, isBroadcaster }) {
     const [isConnected, setIsConnected] = useState(false);
     const [error, setError] = useState(null);
 
-    // In StreamPlayer.jsx
-useEffect(() => {
-    socket.on('connect', () => {
-        console.log('Connected to signaling server');
-    });
-    socket.on('disconnect', () => {
-        console.log('Disconnected from signaling server');
-    });
+    useEffect(() => {
+        // Check socket connection status
+        socket.on('connect', () => {
+            console.log('Connected to signaling server');
+        });
+        socket.on('disconnect', () => {
+            console.log('Disconnected from signaling server');
+        });
 
-    socket.on('connect_error', (err) => {
-        console.error('Connection Error:', err);
-    });
-}, []);
-
+        socket.on('connect_error', (err) => {
+            console.error('Connection Error:', err);
+            setError('Failed to connect to signaling server');
+        });
+    }, []);
 
     useEffect(() => {
         if (isBroadcaster) {
-            navigator.mediaDevices.getUserMedia({ video: true, audio: true }).then((stream) => {
-                if (videoRef.current) {
-                    videoRef.current.srcObject = stream;
-                }
+            navigator.mediaDevices.getUserMedia({ video: true, audio: true })
+                .then((stream) => {
+                    if (videoRef.current) {
+                        videoRef.current.srcObject = stream;
+                    }
+                    
+                    const newPeer = new SimplePeer({ initiator: true, stream });
 
-                const newPeer = new SimplePeer({ initiator: true, stream });
+                    newPeer.on('signal', (signalData) => {
+                        console.log('Sending broadcaster signal:', signalData);
+                        socket.emit('broadcaster-signal', { streamId, signalData });
+                    });
 
-                newPeer.on('signal', (signalData) => {
-                    socket.emit('broadcaster-signal', { streamId, signalData });
-                });
+                    newPeer.on('connect', () => {
+                        console.log('Broadcaster connected to viewer');
+                        setIsConnected(true);
+                    });
 
-                newPeer.on('connect', () => {
-                    setIsConnected(true);
-                });
+                    newPeer.on('error', (err) => {
+                        console.error('Error in broadcaster peer:', err);
+                        setError(err.message);
+                        setIsConnected(false);
+                    });
 
-                newPeer.on('error', (err) => {
-                    console.error('Error in broadcaster peer:', err);
+                    socket.on('viewer-signal', (viewerSignal) => {
+                        console.log('Received viewer signal, responding...');
+                        newPeer.signal(viewerSignal);
+                    });
+
+                    setPeer(newPeer);
+                })
+                .catch((err) => {
+                    console.error('Error accessing media devices:', err);
                     setError(err.message);
-                    setIsConnected(false);
                 });
-
-                socket.on('viewer-signal', (viewerSignal) => {
-                    newPeer.signal(viewerSignal);
-                });
-                setPeer(newPeer);
-            }).catch((err) => {
-                console.error('Error accessing media devices:', err);
-                setError(err.message);
-            });
         } else {
             const newPeer = new SimplePeer();
 
             newPeer.on('signal', (signalData) => {
+                console.log('Sending viewer signal:', signalData);
                 socket.emit('viewer-signal', { streamId, signalData });
             });
 
             newPeer.on('stream', (remoteStream) => {
+                console.log('Received remote stream');
                 if (videoRef.current) {
                     videoRef.current.srcObject = remoteStream;
                 }
             });
 
             newPeer.on('connect', () => {
+                console.log('Viewer connected to broadcaster');
                 setIsConnected(true);
             });
 
@@ -82,8 +91,10 @@ useEffect(() => {
             });
 
             socket.on('broadcaster-signal', (broadcasterSignal) => {
+                console.log('Received broadcaster signal, responding...');
                 newPeer.signal(broadcasterSignal);
             });
+
             setPeer(newPeer);
         }
 
