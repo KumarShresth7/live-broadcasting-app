@@ -12,7 +12,7 @@ export default async function StreamPage({ params }) {
   return (
     <div className="container mx-auto p-4">
       <h1 className="text-2xl font-bold mb-4">Live Stream: {streamId}</h1>
-      <StreamPlayer streamId={streamId} isBroadcaster={true} />
+      <StreamPlayer streamId={streamId} isBroadcaster={false} />
     </div>
   );
 }
